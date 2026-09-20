@@ -1,0 +1,23 @@
+
+services:
+  phoneme-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: phoneme-activity-builder
+
+    ports:
+      - "3001:3000"
+
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "file:/app/data/dev.db"
+
+    volumes:
+      - phoneme_database:/app/data
+
+    restart: unless-stopped
+
+volumes:
+  phoneme_database:
