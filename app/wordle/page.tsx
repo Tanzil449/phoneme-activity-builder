@@ -1433,89 +1433,117 @@ export default function WordlePage() {
   // GENERATE WORDLE FROM STORED DATABASE DATA
   // --------------------------------------------------
 
-  async function generateHTML() {
+ async function generateHTML() {
+  if (!selectedActivityId) {
+    alert(
+      "Please save or load a Wordle activity before generating HTML."
+    );
 
-    if (!selectedActivityId) {
-
-      alert(
-        "Please save or load a Wordle activity before generating HTML."
-      );
-
-      return;
-
-    }
-
-    setLoading(true);
-
-    try {
-
-      // Retrieve the latest saved activity configuration.
-
-      const activity = await requestJSON<SavedActivity>(
-        `/api/activities/${selectedActivityId}`
-      );
-
-      if (activity.type !== "WORDLE") {
-
-        throw new Error(
-          "The selected activity is not a Wordle activity."
-        );
-
-      }
-
-      const storedWords = activity.wordList.words;
-
-      if (storedWords.length === 0) {
-
-        throw new Error(
-          "This activity does not contain any saved words."
-        );
-
-      }
-
-      // Use the selected saved word when it belongs
-      // to the activity's saved word list.
-      // Otherwise, use the first saved word in the list.
-
-      const selectedWord = storedWords.find(
-        (item) =>
-          item.wordId === Number(selectedWordId)
-      );
-
-      const wordRecord =
-        selectedWord?.word || storedWords[0].word;
-
-      // Generate HTML from the actual database records.
-
-      const htmlContent = createWordleHTML(
-        wordRecord,
-        activity
-      );
-
-      downloadHTML(
-        htmlContent,
-        `phoneme-wordle-${activity.id}.html`
-      );
-
-      setDatabaseMessage(
-        "Wordle HTML generated successfully using saved database data."
-      );
-
-    } catch (error) {
-
-      setDatabaseMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to generate Wordle HTML."
-      );
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
+    return;
   }
+
+  setLoading(true);
+
+  const generationStart = Date.now();
+
+  try {
+    // Retrieve the latest saved activity configuration.
+    const activity = await requestJSON<SavedActivity>(
+      `/api/activities/${selectedActivityId}`
+    );
+
+    if (activity.type !== "WORDLE") {
+      throw new Error(
+        "The selected activity is not a Wordle activity."
+      );
+    }
+
+    const storedWords = activity.wordList.words;
+
+    if (storedWords.length === 0) {
+      throw new Error(
+        "This activity does not contain any saved words."
+      );
+    }
+
+    // Use the selected saved word when it belongs
+    // to the activity's saved word list.
+    // Otherwise, use the first saved word in the list.
+    const selectedWord = storedWords.find(
+      (item) =>
+        item.wordId === Number(selectedWordId)
+    );
+
+    const wordRecord =
+      selectedWord?.word || storedWords[0].word;
+
+    // Generate HTML from the actual database records.
+    const htmlContent = createWordleHTML(
+      wordRecord,
+      activity
+    );
+
+    downloadHTML(
+      htmlContent,
+      `phoneme-wordle-${activity.id}.html`
+    );
+
+    setDatabaseMessage(
+      "Wordle HTML generated successfully using saved database data."
+    );
+
+    // Record successful generation for Assessment 3 reporting.
+    await fetch("/api/usage-events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        eventType: "generation",
+        activityType: "WORDLE",
+        success: true,
+        durationMs: Date.now() - generationStart,
+        details: "Wordle HTML generated successfully",
+      }),
+    });
+  } catch (error) {
+    setDatabaseMessage(
+      error instanceof Error
+        ? error.message
+        : "Unable to generate Wordle HTML."
+    );
+
+    // Record failed generation for Assessment 3 reporting.
+    try {
+      await fetch("/api/usage-events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          eventType: "generation",
+          activityType: "WORDLE",
+          success: false,
+          durationMs: Date.now() - generationStart,
+          details:
+            error instanceof Error
+              ? error.message
+              : "Wordle HTML generation failed",
+        }),
+      });
+    } catch {
+      console.error(
+        "Unable to record failed Wordle generation."
+      );
+    }
+  } finally {
+    setLoading(false);
+  }
+}
+
+      
+
+  
 
   // --------------------------------------------------
   // INTERFACE

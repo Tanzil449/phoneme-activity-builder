@@ -1994,124 +1994,133 @@ export default function WordSearchPage() {
   // ---------------------------------------------
 
   async function generateHTML() {
+  if (!selectedActivityId) {
+    alert(
+      "Please save or load a Word Search activity first."
+    );
 
-    if (!selectedActivityId) {
-
-      alert(
-        "Please save or load a Word Search activity first."
-      );
-
-      return;
-
-    }
-
-    setLoading(true);
-
-    try {
-
-      // Retrieve the actual stored configuration.
-
-      const activity =
-        await requestJSON<SavedActivity>(
-          `/api/activities/${selectedActivityId}`
-        );
-
-      if (
-        activity.type !== "WORD_SEARCH"
-      ) {
-
-        throw new Error(
-          "The selected activity is not a Word Search activity."
-        );
-
-      }
-
-      // Retrieve phonemes from the saved word list.
-
-      const savedPhonemeWords =
-        activity.wordList.words.map(
-          (item) =>
-            parsePhonemes(
-              item.word.phonemes
-            ).join(" ")
-        ).filter(Boolean);
-
-      if (
-        savedPhonemeWords.length === 0
-      ) {
-
-        throw new Error(
-          "This saved activity has no valid words."
-        );
-
-      }
-
-      // Generate the puzzle from stored database data.
-
-      const result = buildPuzzle(
-        savedPhonemeWords,
-        activity.gridRows,
-        activity.gridColumns,
-        activity.difficulty
-      );
-
-      setRows(
-        activity.gridRows
-      );
-
-      setColumns(
-        activity.gridColumns
-      );
-
-      setDifficulty(
-        activity.difficulty
-      );
-
-      setPhonemeWords(
-        savedPhonemeWords.join("\n")
-      );
-
-      setGrid(
-        result.grid
-      );
-
-      setSolutions(
-        result.solutions
-      );
-
-      const htmlContent =
-        createWordSearchHTML(
-          result.grid,
-          result.solutions,
-          savedPhonemeWords,
-          activity.difficulty
-        );
-
-      downloadHTML(
-        htmlContent,
-        `phoneme-word-search-${activity.id}.html`
-      );
-
-      setDatabaseMessage(
-        "Word Search HTML generated successfully using saved database data."
-      );
-
-    } catch (error) {
-
-      setDatabaseMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to generate Word Search HTML."
-      );
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
+    return;
   }
 
+  setLoading(true);
+
+  const generationStart = Date.now();
+
+  try {
+    // Retrieve the actual stored configuration.
+    const activity =
+      await requestJSON<SavedActivity>(
+        `/api/activities/${selectedActivityId}`
+      );
+
+    if (activity.type !== "WORD_SEARCH") {
+      throw new Error(
+        "The selected activity is not a Word Search activity."
+      );
+    }
+
+    // Retrieve phonemes from the saved word list.
+    const savedPhonemeWords =
+      activity.wordList.words
+        .map((item) =>
+          parsePhonemes(
+            item.word.phonemes
+          ).join(" ")
+        )
+        .filter(Boolean);
+
+    if (savedPhonemeWords.length === 0) {
+      throw new Error(
+        "This saved activity has no valid words."
+      );
+    }
+
+    // Generate the puzzle from stored database data.
+    const result = buildPuzzle(
+      savedPhonemeWords,
+      activity.gridRows,
+      activity.gridColumns,
+      activity.difficulty
+    );
+
+    setRows(activity.gridRows);
+    setColumns(activity.gridColumns);
+    setDifficulty(activity.difficulty);
+
+    setPhonemeWords(
+      savedPhonemeWords.join("\n")
+    );
+
+    setGrid(result.grid);
+    setSolutions(result.solutions);
+
+    const htmlContent =
+      createWordSearchHTML(
+        result.grid,
+        result.solutions,
+        savedPhonemeWords,
+        activity.difficulty
+      );
+
+    downloadHTML(
+      htmlContent,
+      `phoneme-word-search-${activity.id}.html`
+    );
+
+    setDatabaseMessage(
+      "Word Search HTML generated successfully using saved database data."
+    );
+
+    // Record successful generation for Assessment 3 reporting.
+    await fetch("/api/usage-events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        eventType: "generation",
+        activityType: "WORD_SEARCH",
+        success: true,
+        durationMs: Date.now() - generationStart,
+        details:
+          "Word Search HTML generated successfully",
+      }),
+    });
+  } catch (error) {
+    setDatabaseMessage(
+      error instanceof Error
+        ? error.message
+        : "Unable to generate Word Search HTML."
+    );
+
+    // Record failed generation for Assessment 3 reporting.
+    try {
+      await fetch("/api/usage-events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          eventType: "generation",
+          activityType: "WORD_SEARCH",
+          success: false,
+          durationMs:
+            Date.now() - generationStart,
+          details:
+            error instanceof Error
+              ? error.message
+              : "Word Search HTML generation failed",
+        }),
+      });
+    } catch {
+      console.error(
+        "Unable to record failed Word Search generation."
+      );
+    }
+  } finally {
+    setLoading(false);
+  }
+}
   // ---------------------------------------------
   // INTERFACE
   // ---------------------------------------------
